@@ -33,13 +33,15 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: 📦 Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm install -D @capacitor/cli @capacitor/core @capacitor/android
 
       - name: 🏗️ Build Vite (web)
         run: npm run build
 
       - name: 🔄 Sinkronisasi Capacitor Android
-        run: npx cap sync android      # <-- DI SINI PERBAIKANNYA
+        run: npx cap sync android
 
       - name: 🚀 Build APK
         working-directory: android
