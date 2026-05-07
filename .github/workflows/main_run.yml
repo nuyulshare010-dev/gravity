@@ -1,0 +1,46 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Mengambil Kode
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Menyiapkan Node.js (Dengan Cache NPM)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Mesin sudah di-upgrade ke versi 20
+          cache: 'npm'
+
+      - name: ☕ Menyiapkan Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: ⚡ Menyiapkan Cache Gradle (Boster Kecepatan Android)
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: 📦 Menginstal Dependencies
+        run: npm install
+
+      - name: 🏗️ Prebuild Expo ke Android Asli
+        run: npx expo prebuild --platform android
+
+      - name: 🚀 Merakit APK (Mode Ngebut)
+        working-directory: android
+        run: ./gradlew assembleRelease --parallel -Porg.gradle.configuration-cache=true
+
+      - name: 📤 Mengunggah APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVKu-App-Release
+          path: android/app/build/outputs/apk/release/app-release.apk
