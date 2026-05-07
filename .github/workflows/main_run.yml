@@ -40,7 +40,18 @@ jobs:
       - name: 🏗️ Build Vite (web)
         run: npm run build
 
-      - name: 📱 Setup Proyek Android (jika belum ada)
+      - name: 📄 Buat capacitor.config.json (otomatis)
+        run: |
+          echo '{
+            "appId": "com.example.gravity",
+            "appName": "Gravity",
+            "webDir": "dist",
+            "server": {
+              "androidScheme": "https"
+            }
+          }' > capacitor.config.json
+
+      - name: 📱 Setup proyek Android (hanya jika belum ada)
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
