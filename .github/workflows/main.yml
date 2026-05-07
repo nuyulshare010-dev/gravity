@@ -1,40 +1,49 @@
-name: React Native Android Build
+name: Build Android APK
 
 on:
   push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout kode sumber
-      - name: Checkout code
+      - name: 📥 Mengambil Kode
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js (Sesuaikan versi dengan proyek Anda, biasanya 18 atau 20)
-      - name: Setup Node.js
+      - name: ⚙️ Menyiapkan Node.js (Dengan Cache NPM)
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm' # Atau 'yarn' jika Anda menggunakan Yarn
+          node-version: '20' # Mesin sudah di-upgrade ke versi 20
+          cache: 'npm'
 
-      # 3. Install Dependensi JavaScript
-      - name: Install npm dependencies
-        run: npm ci # Gunakan 'npm install' jika tidak ada package-lock.json
-
-      # 4. Setup Java JDK 17 (Wajib untuk React Native versi baru & Android Gradle Plugin terbaru)
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: ☕ Menyiapkan Java
+        uses: actions/setup-java@v3
         with:
+          distribution: 'zulu'
           java-version: '17'
-          distribution: 'temurin'
 
-      # 5. Grant permission untuk gradlew di folder android
-      - name: Grant execute permission for gradlew
+      - name: ⚡ Menyiapkan Cache Gradle (Boster Kecepatan Android)
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: 📦 Menginstal Dependencies
+        run: npm install
+
+      - name: 🏗️ Prebuild Expo ke Android Asli
+        run: npx expo prebuild --platform android
+
+      - name: 🚀 Merakit APK (Mode Ngebut)
+        working-directory: android
+        run: ./gradlew assembleRelease --parallel -Porg.gradle.configuration-cache=true
+
+      - name: 📤 Mengunggah APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVKu-App-Release
+          path: android/app/build/outputs/apk/release/app-release.apk      - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
       # 6. Cache Gradle untuk mempercepat build berikutnya
