@@ -1,4 +1,4 @@
-name: Build Android APK (Expo)
+name: Build Android APK (Vite + Capacitor)
 
 on:
   push:
@@ -20,29 +20,29 @@ jobs:
           cache: 'npm'
 
       - name: ☕ Setup JDK 17
-        uses: actions/setup-java@v4  # DIPERBAIKI: v4
+        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'     # Lebih stabil dari 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
-      - name: 📦 Install dependencies
+      - name: 📦 Install Dependencies
         run: npm ci
 
-      - name: 🏗️ Prebuild Expo to Android
-        run: npx expo prebuild --platform android --clean
+      - name: 🏗️ Build Web App (Vite)
+        run: npm run build
+        # Ini akan membuat folder 'dist/' berisi file HTML/CSS/JS
 
-      - name: 🔑 Setup Signing Config (Debug for now)
-        # Sementara, kita build DEBUG karena RELEASE butuh secrets
-        # Jika ingin RELEASE, lihat catatan di bawah
-        run: echo "Kita akan build debug dulu untuk testing"
+      - name: 🔄 Sync Web Assets to Android
+        run: npx cap copy android
+        # Ini menyalin isi folder 'dist/' ke dalam proyek Android
 
-      - name: 🚀 Build Debug APK (Aman & Cepat)
+      - name: 🚀 Build Debug APK
         working-directory: ./android
         run: ./gradlew assembleDebug --parallel
 
-      - name: 📤 Upload Debug APK
+      - name:  Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: TVKu-App-Debug
+          name: gravity-app-debug.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
