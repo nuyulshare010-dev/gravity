@@ -25,22 +25,40 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 📦 Install Dependencies
-        run: npm ci
+      - name: 📦 Install ALL Dependencies (including Capacitor)
+        run: |
+          npm ci
+          # Pastikan Capacitor CLI terinstal — jika belum ada di package.json, tambahkan
+          if ! npm list @capacitor/cli > /dev/null 2>&1; then
+            echo "⚠️ @capacitor/cli not found, installing..."
+            npm install --save-dev @capacitor/cli @capacitor/core @capacitor/android
+          fi
 
       - name: 🏗️ Build Web App (Vite)
         run: npm run build
-        # Ini akan membuat folder 'dist/' berisi file HTML/CSS/JS
+
+      - name: 🔧 Initialize Capacitor (if config missing)
+        run: |
+          if [ ! -f capacitor.config.json ]; then
+            echo "🛠️ Initializing Capacitor..."
+            npx cap init gravity com.gravity.iptv --web-dir dist
+          fi
+
+      - name: ➕ Add Android Platform (if folder missing)
+        run: |
+          if [ ! -d android ]; then
+            echo "📱 Adding Android platform..."
+            npx cap add android
+          fi
 
       - name: 🔄 Sync Web Assets to Android
         run: npx cap copy android
-        # Ini menyalin isi folder 'dist/' ke dalam proyek Android
 
-      - name: 🚀 Build Debug APK
+      - name:  Build Debug APK
         working-directory: ./android
         run: ./gradlew assembleDebug --parallel
 
-      - name:  Upload Debug APK
+      - name: 📤 Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: gravity-app-debug.apk
