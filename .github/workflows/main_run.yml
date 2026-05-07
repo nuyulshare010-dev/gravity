@@ -57,6 +57,20 @@ jobs:
             npx cap add android
           fi
 
+      - name: 🔧 Atasi konflik Kotlin (exclude duplikat)
+        run: |
+          if [ -f android/app/build.gradle ]; then
+            if ! grep -q "exclude group: 'org.jetbrains.kotlin'" android/app/build.gradle; then
+              sed -i '/android {/a \
+              configurations {\
+                  all {\
+                      exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"\
+                      exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"\
+                  }\
+              }' android/app/build.gradle
+            fi
+          fi
+
       - name: 🔄 Sinkronisasi Capacitor
         run: npx cap sync android
 
