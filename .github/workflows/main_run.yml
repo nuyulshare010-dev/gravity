@@ -2,7 +2,8 @@ name: Build Android APK (Vite + Capacitor)
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -10,43 +11,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout code
+      - name: 📥 Mengambil Kode
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js
+      - name: ⚙️ Menyiapkan Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: ☕ Setup JDK 17
-        uses: actions/setup-java@v4
+      - name: ☕ Menyiapkan Java
+        uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
 
-      - name: 📦 Install Dependencies
+      - name: 🤖 Menyiapkan Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: ⚡ Cache Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: 📦 Instal Dependencies
         run: npm ci
 
-      - name:  Install Capacitor CLI (if missing)
-        run: |
-          if ! npm list @capacitor/cli > /dev/null 2>&1; then
-            npm install --save-dev @capacitor/cli @capacitor/core @capacitor/android
-          fi
-
-      - name: 🏗️ Build Web App (Vite)
+      - name: 🏗️ Build Vite (Web)
         run: npm run build
 
-      - name: 🔄 Sync Web Assets to Android
-        run: ./node_modules/.bin/cap copy android
+      - name: 🔄 Sinkronisasi Capacitor Android
+        run: npx cap sync android
 
-      - name: 🚀 Build Debug APK
-        working-directory: ./android
-        run: ./gradlew assembleDebug --parallel
+      - name: 🚀 Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease
 
-      - name: 📤 Upload Debug APK
+      - name: 📤 Unggah APK
         uses: actions/upload-artifact@v4
         with:
-          name: gravity-app-debug.apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+          name: gravity-app-release
+          path: android/app/build/outputs/apk/release/app-release.apk
