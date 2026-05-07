@@ -11,41 +11,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Mengambil Kode
+      - name: 📥 Checkout kode
         uses: actions/checkout@v4
 
-      - name: ⚙️ Menyiapkan Node.js
+      - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: ☕ Menyiapkan Java
+      - name: ☕ Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: 🤖 Menyiapkan Android SDK
+      - name: 🤖 Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: ⚡ Cache Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: 📦 Instal Dependencies
+      - name: 📦 Install dependencies
         run: npm ci
 
-      - name: 🏗️ Build Vite (Web)
+      - name: 🏗️ Build Vite (web)
         run: npm run build
 
       - name: 🔄 Sinkronisasi Capacitor Android
-        run: npx cap sync android
+        run: npx cap sync android      # <-- DI SINI PERBAIKANNYA
 
       - name: 🚀 Build APK
         working-directory: android
         run: ./gradlew assembleRelease
 
-      - name: 📤 Unggah APK
+      - name: 📤 Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: gravity-app-release
