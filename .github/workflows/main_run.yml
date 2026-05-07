@@ -32,15 +32,21 @@ jobs:
       - name: ⚡ Cache Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: 📦 Install dependencies
+      - name: 📦 Install dependencies (termasuk Capacitor)
         run: |
           npm ci
-          npm install -D @capacitor/cli @capacitor/core @capacitor/android
+          npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: 🏗️ Build Vite (web)
         run: npm run build
 
-      - name: 🔄 Sinkronisasi Capacitor Android
+      - name: 📱 Setup Proyek Android (jika belum ada)
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+      - name: 🔄 Sinkronisasi Capacitor
         run: npx cap sync android
 
       - name: 🚀 Build APK
