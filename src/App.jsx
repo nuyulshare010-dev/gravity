@@ -3,11 +3,9 @@ import Player from './components/Player';
 import StreamConfig from './components/StreamConfig';
 import Library from './components/Library';
 import ConfirmModal from './components/ConfirmModal';
-import MobileNav from './components/MobileNav';
-import MobileTabBar from './components/MobileTabBar';
 import { parseM3U } from './utils/m3uParser';
 
-// Helper to load from localStorage
+// Helper localStorage
 const loadLibraryFromStorage = () => {
   try {
     const saved = localStorage.getItem('gravity_library');
@@ -38,15 +36,17 @@ const loadPrefsFromStorage = () => {
 
 function App() {
   const [activeConfig, setActiveConfig] = useState(null);
-  // Lazy initialization - loads from localStorage on first render
   const [library, setLibrary] = useState(loadLibraryFromStorage);
-  const [view, setView] = useState('library');
   const [editingId, setEditingId] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState(loadCollapsedFromStorage);
   const [prefs, setPrefs] = useState(loadPrefsFromStorage);
   const [searchQuery, setSearchQuery] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // State untuk sidebar Library (kiri) dan panel Settings (kanan? di atas player)
+  const [librarySidebarOpen, setLibrarySidebarOpen] = useState(true); // sidebar daftar channel
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);  // panel import/tambah
+
   const isFirstRender = useRef(true);
 
   const [formConfig, setFormConfig] = useState({
@@ -62,7 +62,7 @@ function App() {
     authorization: ''
   });
 
-  // Save to localStorage when library changes (skip first render)
+  // Save to localStorage
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -71,17 +71,15 @@ function App() {
     localStorage.setItem('gravity_library', JSON.stringify(library));
   }, [library]);
 
-  // Save collapsed groups when they change
   useEffect(() => {
     localStorage.setItem('gravity_collapsed_groups', JSON.stringify(collapsedGroups));
   }, [collapsedGroups]);
 
-  // Save prefs when they change
   useEffect(() => {
     localStorage.setItem('gravity_prefs', JSON.stringify(prefs));
   }, [prefs]);
 
-  // Group items by group name
+  // Group library
   const groupedLibrary = library.reduce((acc, item) => {
     const group = item.group || 'Uncategorized';
     if (!acc[group]) acc[group] = [];
@@ -89,32 +87,18 @@ function App() {
     return acc;
   }, {});
 
-  // Sort groups based on sortMode
   const sortedGroups = prefs.sortMode === 'alphabetical'
     ? Object.keys(groupedLibrary).sort((a, b) => a.localeCompare(b))
-    : Object.keys(groupedLibrary); // default order (insertion order)
+    : Object.keys(groupedLibrary);
 
   const toggleGroup = (group) => {
-    setCollapsedGroups(prev => ({
-      ...prev,
-      [group]: !prev[group]
-    }));
-  };
-
-  const collapseAll = () => {
-    const allCollapsed = {};
-    sortedGroups.forEach(g => allCollapsed[g] = true);
-    setCollapsedGroups(allCollapsed);
-  };
-
-  const expandAll = () => {
-    setCollapsedGroups({});
+    setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
   };
 
   const handlePlay = (e) => {
     if (e) e.preventDefault();
     setActiveConfig({ ...formConfig });
-    setView('player');
+    // Bisa langsung memutar, player ada di kanan
   };
 
   const handleSaveToLibrary = () => {
@@ -127,6 +111,7 @@ function App() {
       const newItem = { ...formConfig, id: crypto.randomUUID(), addedAt: Date.now() };
       setLibrary(prev => [...prev, newItem]);
     }
+    // Reset form
     setFormConfig({
       name: 'New Stream',
       manifestUrl: '',
@@ -139,6 +124,8 @@ function App() {
       referrer: '',
       authorization: ''
     });
+    // Tutup panel settings setelah save
+    setSettingsPanelOpen(false);
   };
 
   const handleImportM3U = (content) => {
@@ -146,13 +133,12 @@ function App() {
     if (playlists.length > 0) {
       const withTimestamp = playlists.map(p => ({ ...p, addedAt: Date.now() }));
       setLibrary(prev => [...prev, ...withTimestamp]);
-      setView('library');
     }
+    setSettingsPanelOpen(false);
   };
 
   const handlePlayFromLibrary = (item) => {
     setActiveConfig(item);
-    setView('player');
   };
 
   const handleDelete = (id) => {
@@ -160,7 +146,7 @@ function App() {
     setConfirmModal({
       isOpen: true,
       title: 'Delete Channel',
-      message: `Are you sure you want to delete "${item?.name || 'this channel'}"? This action cannot be undone.`,
+      message: `Are you sure you want to delete "${item?.name || 'this channel'}"?`,
       onConfirm: () => {
         setLibrary(prev => prev.filter(item => item.id !== id));
         if (editingId === id) setEditingId(null);
@@ -173,7 +159,7 @@ function App() {
     setConfirmModal({
       isOpen: true,
       title: 'Clear Library',
-      message: `Are you sure you want to delete all ${library.length} streams? This action cannot be undone.`,
+      message: `Are you sure you want to delete all ${library.length} streams?`,
       onConfirm: () => {
         setLibrary([]);
         setEditingId(null);
@@ -185,6 +171,8 @@ function App() {
   const handleEdit = (item) => {
     setFormConfig({ ...item });
     setEditingId(item.id);
+    // Buka panel settings untuk mengedit
+    setSettingsPanelOpen(true);
   };
 
   const handleCancelEdit = () => {
@@ -201,118 +189,52 @@ function App() {
       referrer: '',
       authorization: ''
     });
+    setSettingsPanelOpen(false);
   };
 
   return (
-    <div className="app-container">
-      {/* Mobile Navigation */}
-      <MobileNav
-        onMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
-        currentView={view}
-        drawerOpen={mobileMenuOpen}
-      />
+    <div style={{ display: 'flex', height: '100dvh', width: '100%', overflow: 'hidden', background: 'var(--bg-primary)' }}>
 
-      {/* Mobile Drawer Overlay */}
-      <div
-        className={`drawer-overlay ${mobileMenuOpen ? 'open' : ''}`}
-        onClick={() => setMobileMenuOpen(false)}
-      />
-
-      {/* Sidebar (desktop) / Drawer (mobile) */}
-      <aside className={`sidebar ${mobileMenuOpen ? 'drawer-open' : ''}`}>
-        <div style={{ marginBottom: '24px' }}>
-          <h1
-            style={{ cursor: 'pointer', marginBottom: '4px' }}
-            onClick={() => { setView('library'); setMobileMenuOpen(false); }}
-          >
-            Gravity
-          </h1>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Network Stream Player</p>
-        </div>
-
-        <div className="tab-group" style={{ marginBottom: '24px' }}>
-          <button
-            type="button"
-            onClick={() => { setView('library'); setMobileMenuOpen(false); }}
-            className={`tab-btn ${view === 'library' ? 'active' : ''}`}
-          >
-            Library
-          </button>
-          <button
-            type="button"
-            onClick={() => { setView('player'); setMobileMenuOpen(false); }}
-            className={`tab-btn ${view === 'player' ? 'active' : ''}`}
-          >
-            Player {activeConfig && '●'}
-          </button>
-        </div>
-
-        <StreamConfig
-          config={formConfig}
-          onConfigChange={setFormConfig}
-          onSubmit={(e) => { handlePlay(e); setMobileMenuOpen(false); }}
-          onSaveToLibrary={() => { handleSaveToLibrary(); setMobileMenuOpen(false); }}
-          onImportM3U={(content) => { handleImportM3U(content); setMobileMenuOpen(false); }}
-          isEditing={!!editingId}
-          onCancelEdit={handleCancelEdit}
-        />
-      </aside>
-
-      {/* Main */}
-      <main className="player-area" style={{ position: 'relative' }}>
+      {/* ====== SIDEBAR KIRI (LIBRARY) ====== */}
+      <div style={{
+        width: librarySidebarOpen ? '320px' : '0px',
+        maxWidth: '85vw',
+        height: '100dvh',
+        background: 'var(--bg-secondary)',
+        borderRight: '1px solid var(--border)',
+        overflow: 'hidden',
+        transition: 'width 0.3s ease',
+        flexShrink: 0,
+        zIndex: 20,
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        {/* Header sidebar */}
         <div style={{
-          position: 'absolute',
-          inset: 0,
-          display: view === 'player' ? 'flex' : 'none',
+          padding: '16px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          justifyContent: 'space-between',
           alignItems: 'center',
-          justifyContent: 'center'
+          flexShrink: 0
         }}>
-          {activeConfig ? (
-            <Player
-              manifestUrl={activeConfig.manifestUrl}
-              drmScheme={activeConfig.drmScheme}
-              clearKeys={activeConfig.clearKeys}
-              licenseUrl={activeConfig.licenseUrl}
-              userAgent={activeConfig.userAgent}
-              referrer={activeConfig.referrer}
-              authorization={activeConfig.authorization}
-              autoPlay={true}
-            />
-          ) : (
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)', maxWidth: '300px' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}>📡</div>
-              <h2 style={{ fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '8px', textTransform: 'none', letterSpacing: 0 }}>
-                No stream playing
-              </h2>
-              <p style={{ fontSize: '0.875rem' }}>
-                Enter a stream URL in the sidebar or select one from your library
-              </p>
-            </div>
-          )}
+          <h2 style={{ margin: 0, fontSize: '0.8rem', letterSpacing: '0.1em' }}>CHANNELS</h2>
+          <button
+            className="btn btn-ghost"
+            style={{ padding: '6px 10px', fontSize: '0.8rem' }}
+            onClick={() => setLibrarySidebarOpen(false)}
+          >
+            ✕
+          </button>
         </div>
 
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          display: view === 'library' ? 'block' : 'none',
-          overflow: 'auto'
-        }}>
+        {/* Library list (scroll) */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
           <Library
             groupedItems={groupedLibrary}
             sortedGroups={sortedGroups}
             collapsedGroups={collapsedGroups}
             onToggleGroup={toggleGroup}
-            onToggleAll={() => {
-              const allCollapsed = sortedGroups.every(g => collapsedGroups[g]);
-              if (allCollapsed) {
-                setCollapsedGroups({});
-              } else {
-                const all = {};
-                sortedGroups.forEach(g => all[g] = true);
-                setCollapsedGroups(all);
-              }
-            }}
-            allCollapsed={sortedGroups.length > 0 && sortedGroups.every(g => collapsedGroups[g])}
             onPlay={handlePlayFromLibrary}
             onEdit={handleEdit}
             onDelete={handleDelete}
@@ -324,21 +246,155 @@ function App() {
             onPrefsChange={setPrefs}
           />
         </div>
-      </main>
+      </div>
 
-      {/* Confirmation Modal */}
+      {/* ====== PLAYER AREA & SETTINGS PANEL ====== */}
+      <div style={{ flex: 1, height: '100dvh', background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* Hamburger untuk buka Settings Panel */}
+        <button
+          onClick={() => setSettingsPanelOpen(true)}
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            zIndex: 30,
+            background: 'var(--bg-glass)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            width: 40,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-primary)',
+            cursor: 'pointer',
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        {/* Tombol untuk membuka Library Sidebar (jika tertutup) */}
+        {!librarySidebarOpen && (
+          <button
+            onClick={() => setLibrarySidebarOpen(true)}
+            style={{
+              position: 'absolute',
+              top: 12,
+              left: 60,
+              zIndex: 30,
+              background: 'var(--bg-glass)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '8px 12px',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+            }}
+          >
+            ☰ Channels
+          </button>
+        )}
+
+        {/* Settings Panel (Drawer) */}
+        {settingsPanelOpen && (
+          <>
+            {/* Overlay */}
+            <div
+              onClick={() => setSettingsPanelOpen(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(4px)',
+                zIndex: 40,
+              }}
+            />
+            {/* Panel */}
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: '340px',
+              maxWidth: '90vw',
+              background: 'var(--bg-secondary)',
+              zIndex: 50,
+              boxShadow: '5px 0 30px rgba(0,0,0,0.5)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}>
+              {/* Header panel */}
+              <div style={{
+                padding: '16px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <h2 style={{ margin: 0, fontSize: '0.9rem', letterSpacing: '0.05em' }}>
+                  {editingId ? 'Edit Stream' : 'Add Stream'}
+                </h2>
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: '6px 10px', fontSize: '0.8rem' }}
+                  onClick={() => { setSettingsPanelOpen(false); if (editingId) handleCancelEdit(); }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Konten StreamConfig */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+                <StreamConfig
+                  config={formConfig}
+                  onConfigChange={setFormConfig}
+                  onSubmit={(e) => { handlePlay(e); }}
+                  onSaveToLibrary={handleSaveToLibrary}
+                  onImportM3U={handleImportM3U}
+                  isEditing={!!editingId}
+                  onCancelEdit={handleCancelEdit}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Player */}
+        {activeConfig ? (
+          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <Player
+              manifestUrl={activeConfig.manifestUrl}
+              drmScheme={activeConfig.drmScheme}
+              clearKeys={activeConfig.clearKeys}
+              licenseUrl={activeConfig.licenseUrl}
+              userAgent={activeConfig.userAgent}
+              referrer={activeConfig.referrer}
+              authorization={activeConfig.authorization}
+              autoPlay={true}
+            />
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+            <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 48, height: 48, opacity: 0.3, marginBottom: 12 }}>
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <p>Select a channel from the list</p>
+          </div>
+        )}
+      </div>
+
+      {/* Confirm Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ isOpen: false })}
-      />
-
-      {/* Mobile Bottom Tab Bar */}
-      <MobileTabBar
-        currentView={view}
-        onViewChange={(newView) => { setView(newView); setMobileMenuOpen(false); }}
       />
     </div>
   );
