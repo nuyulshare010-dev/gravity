@@ -33,7 +33,6 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  /* Use dynamic viewport height for mobile browsers */
   height: 100dvh; 
 }
 
@@ -265,7 +264,6 @@ select option {
   height: 100%;
   background: #000;
   position: relative;
-  /* Ensure it doesn't spill over */
   display: flex;
   overflow: hidden; 
 }
@@ -285,7 +283,6 @@ video {
 
 /* Mobile Shaka Player Overrides */
 @media (max-width: 768px) {
-  /* Fix Overlapping: Reset padding since the player is contained between header and footer */
   .video-container .shaka-controls-container {
     padding-bottom: 4px !important; 
     bottom: 0 !important;
@@ -298,7 +295,6 @@ video {
     left: 2% !important;
   }
   
-  /* Larger touch targets for mobile */
   .video-container .shaka-small-play-button,
   .video-container .shaka-fullscreen-button,
   .video-container .shaka-mute-button,
@@ -308,7 +304,6 @@ video {
     padding: 10px !important;
   }
   
-  /* Seek bar */
   .video-container .shaka-seek-bar-container {
     height: 4px !important;
     padding: 10px 0 !important;
@@ -320,19 +315,16 @@ video {
     border-radius: 2px !important;
   }
   
-  /* Controls Layout */
   .video-container .shaka-controls-button-panel {
     gap: 12px !important;
     padding: 0 4px !important;
     justify-content: flex-end;
   }
   
-  /* Hide volume slider on mobile - use hardware buttons */
   .video-container .shaka-volume-bar-container {
     display: none !important;
   }
 
-  /* Ensure text/buffering doesn't overlap header */
   .shaka-text-container {
     bottom: 20% !important; 
   }
@@ -545,7 +537,6 @@ video {
 
 /* Mobile Breakpoint */
 @media (max-width: 768px) {
-  /* Show mobile elements */
   .mobile-nav,
   .mobile-tab-bar {
     display: flex;
@@ -560,17 +551,14 @@ video {
     pointer-events: auto;
   }
 
-  /* Layout Adjustment */
   .app-container {
     grid-template-columns: 1fr;
-    /* Use variables or safe values */
     padding-top: 56px; 
     padding-bottom: 60px;
     height: 100dvh;
   }
 
   .sidebar {
-    /* Mobile drawer mode */
     display: block;
     position: fixed;
     top: 56px;
@@ -592,22 +580,18 @@ video {
     box-shadow: 10px 0 30px rgba(0,0,0,0.5);
   }
 
-  /* Player area - Fixed overlap */
   .player-area {
-    /* Exact height calculation using dvh */
     height: calc(100dvh - 56px - 60px);
     width: 100%;
     position: relative;
     z-index: 1;
   }
   
-  /* Ensure video container stays within player area */
   .player-area .video-container {
     height: 100%;
     width: 100%;
   }
 
-  /* Library adjustments */
   .library-container {
     padding: 16px !important;
   }
@@ -617,7 +601,6 @@ video {
     padding: 8px 12px !important;
   }
 
-  /* Buttons & Inputs Touch optimization */
   .btn, input, select, textarea, .tab-btn {
     min-height: 44px;
   }
@@ -639,7 +622,6 @@ video {
     min-height: 48px;
   }
 
-  /* Responsive Flex Grids */
   .library-header-mobile {
     flex-direction: column !important;
     align-items: stretch !important;
@@ -774,8 +756,7 @@ video {
     }
     
     .player-area {
-       /* Recalculate based on safe areas to prevent overlap */
-       height: calc(100dvh - (56px + max(0px, env(safe-area-inset-top))) - (60px + max(0px, env(safe-area-inset-bottom))));
+      height: calc(100dvh - (56px + max(0px, env(safe-area-inset-top))) - (60px + max(0px, env(safe-area-inset-bottom))));
     }
   }
 }
