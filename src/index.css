@@ -760,3 +760,101 @@ video {
     }
   }
 }
+
+/* ===== TAMBAHAN UNTUK MODAL & HEADER TABS ===== */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: var(--text-primary);
+}
+
+.modal-content h2 {
+  margin-bottom: 16px;
+}
+
+.modal-content textarea {
+  width: 100%;
+  min-height: 140px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  padding: 12px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+/* Header Tabs */
+.header-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.header-tabs button {
+  background: transparent;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.header-tabs button.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+/* Library layout */
+.library-container {
+  padding: 24px;
+  max-width: 600px;
+  margin: 0 auto;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.library-container h2 {
+  margin-bottom: 20px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
