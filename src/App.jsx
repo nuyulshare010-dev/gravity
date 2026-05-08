@@ -39,8 +39,9 @@ function App() {
   });
   const [currentChannel, setCurrentChannel] = useState(null);
   const [expandedGroup, setExpandedGroup] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true); // default terbuka
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [playerError, setPlayerError] = useState(null);
 
   // Form single
   const [fName, setFName] = useState('');
@@ -55,6 +56,7 @@ function App() {
   // Player
   const videoRef = useRef(null);
   const playerRef = useRef(null);
+  const prevChannelRef = useRef(null); // untuk membandingkan channel sebelumnya
 
   /* Simpan ke localStorage */
   useEffect(() => {
@@ -64,13 +66,56 @@ function App() {
   /* Inisialisasi player saat currentChannel berubah */
   useEffect(() => {
     if (!currentChannel) return;
-    shaka.polyfill.installAll();
-    const v = videoRef.current;
-    if (!v) return;
-    const p = new shaka.Player(v);
-    playerRef.current = p;
-    p.load(currentChannel.url).catch(console.error);
-    return () => { p.destroy(); playerRef.current = null; };
+    // Hindari inisialisasi ulang channel yang sama
+    if (prevChannelRef.current?.url === currentChannel.url) return;
+
+    prevChannelRef.current = currentChannel;
+    setPlayerError(null);
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Hentikan player sebelumnya
+    if (playerRef.current) {
+      playerRef.current.destroy();
+      playerRef.current = null;
+    }
+
+    // Deteksi ekstensi URL
+    const url = currentChannel.url;
+    const isHLS = url.endsWith('.m3u8') || url.includes('m3u8');
+    const isDASH = url.endsWith('.mpd') || url.includes('mpd');
+
+    if (isHLS || !isDASH) {
+      // Gunakan native untuk HLS atau format tidak dikenal (Android mendukung HLS native)
+      video.src = url;
+      video.play().catch(err => {
+        console.error('Native playback error:', err);
+        setPlayerError('Cannot play this stream.');
+      });
+    } else {
+      // Gunakan Shaka untuk DASH
+      shaka.polyfill.installAll();
+      if (shaka.Player.isBrowserSupported()) {
+        const player = new shaka.Player(video);
+        playerRef.current = player;
+
+        player.load(url).catch(err => {
+          console.error('Shaka error, trying native:', err);
+          player.destroy();
+          playerRef.current = null;
+          video.src = url;
+          video.play().catch(e => setPlayerError('Cannot play this stream.'));
+        });
+      } else {
+        video.src = url;
+        video.play().catch(e => setPlayerError('Browser not supported.'));
+      }
+    }
+
+    return () => {
+      // Cleanup saat unmount atau ganti channel (dilakukan di atas)
+    };
   }, [currentChannel]);
 
   /* Putar channel, tutup sidebar di mobile */
@@ -163,12 +208,12 @@ function App() {
                 <p style={{ fontSize: '0.75rem', marginBottom: 8, color: 'var(--text-muted)' }}>or import M3U playlist</p>
                 <button className="btn btn-secondary" style={{ width: '100%', marginBottom: 8 }} onClick={() => fileRef.current?.click()}>Load M3U File</button>
                 <input type="file" accept=".m3u,.m3u8,.txt" ref={fileRef} style={{ display: 'none' }} onChange={handleFile} />
-                <textarea placeholder="#EXTM3U ..." value={m3u} onChange={e => setM3u(e.target.value)} className="form-group" style={{ width: '100%', minHeight: 100, background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 12, fontSize: '0.8rem', resize: 'vertical' }} />
+                <textarea placeholder="#EXTM3U ..." value={m3u} onChange={e => setM3u(e.target.value)} style={{ width: '100%', minHeight: 100, background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 12, fontSize: '0.8rem', resize: 'vertical' }} />
                 <button className="btn btn-primary" style={{ width: '100%' }} onClick={importM3U}>Import to Library</button>
               </div>
             </div>
           ) : groups.length === 0 ? (
-            <div className="empty-state" style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
               <p>No channels yet</p>
               <p style={{ fontSize: '0.7rem', marginTop: 6 }}>Click "+ Add" to import</p>
             </div>
@@ -207,7 +252,7 @@ function App() {
 
       {/* ====== PLAYER AREA KANAN ====== */}
       <div style={{ flex: 1, height: '100dvh', background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {/* Hamburger button (overlay di atas player) */}
+        {/* Hamburger button */}
         <button className="hamburger-btn" onClick={() => setSidebarOpen(!sidebarOpen)} style={{
           position: 'absolute', top: 12, left: 12, zIndex: 30,
           background: 'var(--bg-glass)', backdropFilter: 'blur(8px)', border: '1px solid var(--border)',
@@ -220,11 +265,16 @@ function App() {
         </button>
 
         {currentChannel ? (
-          <div className="video-container" style={{ width: '100%', height: '100%' }}>
+          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
             <video ref={videoRef} style={{ width: '100%', height: '100%', background: '#000' }} controls autoPlay />
             <div className="badge" style={{ position: 'absolute', top: 14, left: 60, zIndex: 10 }}>
               {currentChannel.name}
             </div>
+            {playerError && (
+              <div style={{ position: 'absolute', bottom: 20, left: 20, background: 'rgba(239,68,68,0.9)', color: 'white', padding: '8px 14px', borderRadius: 8, fontSize: '0.8rem' }}>
+                {playerError}
+              </div>
+            )}
           </div>
         ) : (
           <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
