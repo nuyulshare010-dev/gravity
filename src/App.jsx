@@ -2,30 +2,54 @@ import { useEffect, useRef, useState } from 'react';
 import shaka from 'shaka-player';
 import 'shaka-player/dist/controls.css';
 
-/* ==================== PARSER M3U ==================== */
+/* ==================== PARSER M3U (DENGAN DRM) ==================== */
 function parseM3U(content) {
   const lines = content.split(/\r?\n/);
   const channels = [];
-  let cur = { name: '', group: '', logo: '', url: '' };
+  let cur = {
+    name: '',
+    group: '',
+    logo: '',
+    url: '',
+    licenseUrl: '',
+    drmScheme: 'com.widevine.alpha' // default Widevine
+  };
 
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
+
     if (line.startsWith('#EXTINF:')) {
       const comma = line.lastIndexOf(',');
       cur.name = comma !== -1 ? line.slice(comma + 1).trim() : 'Unknown';
+
       const nm = line.match(/tvg-name="([^"]*)"/);
       if (nm) cur.name = nm[1];
       const gr = line.match(/group-title="([^"]*)"/);
       if (gr) cur.group = gr[1];
       const lg = line.match(/tvg-logo="([^"]*)"/);
       if (lg) cur.logo = lg[1];
-    } else if (line.startsWith('#') || line.startsWith('#KODIPROP:')) {
+
+    } else if (line.startsWith('#KODIPROP:')) {
+      // Ekstrak lisensi DRM
+      const licenseType = line.match(/license_type=([^ ]*)/);
+      if (licenseType) cur.drmScheme = licenseType[1];
+
+      const licenseKey = line.match(/license_key=([^ ]*)/);
+      if (licenseKey) cur.licenseUrl = licenseKey[1];
+
+    } else if (line.startsWith('#') || line.startsWith('#')) {
+      // Komentar lain diabaikan
       continue;
     } else {
+      // URL stream
       cur.url = line;
       channels.push({ ...cur });
-      cur = { name: '', group: '', logo: '', url: '' };
+      // Reset untuk channel berikutnya
+      cur = {
+        name: '', group: '', logo: '', url: '',
+        licenseUrl: '', drmScheme: 'com.widevine.alpha'
+      };
     }
   }
   return channels;
@@ -56,20 +80,15 @@ function App() {
   // Player
   const videoRef = useRef(null);
   const playerRef = useRef(null);
-  const prevChannelRef = useRef(null); // untuk membandingkan channel sebelumnya
 
   /* Simpan ke localStorage */
   useEffect(() => {
     localStorage.setItem('gravity_channels', JSON.stringify(channels));
   }, [channels]);
 
-  /* Inisialisasi player saat currentChannel berubah */
+  /* Inisialisasi player */
   useEffect(() => {
     if (!currentChannel) return;
-    // Hindari inisialisasi ulang channel yang sama
-    if (prevChannelRef.current?.url === currentChannel.url) return;
-
-    prevChannelRef.current = currentChannel;
     setPlayerError(null);
 
     const video = videoRef.current;
@@ -81,44 +100,56 @@ function App() {
       playerRef.current = null;
     }
 
-    // Deteksi ekstensi URL
     const url = currentChannel.url;
     const isHLS = url.endsWith('.m3u8') || url.includes('m3u8');
-    const isDASH = url.endsWith('.mpd') || url.includes('mpd');
+    const hasDRM = !!currentChannel.licenseUrl;
 
-    if (isHLS || !isDASH) {
-      // Gunakan native untuk HLS atau format tidak dikenal (Android mendukung HLS native)
-      video.src = url;
-      video.play().catch(err => {
-        console.error('Native playback error:', err);
-        setPlayerError('Cannot play this stream.');
-      });
-    } else {
-      // Gunakan Shaka untuk DASH
+    // Jika ada DRM atau bukan HLS, gunakan Shaka untuk menangani DRM
+    if (hasDRM || !isHLS) {
       shaka.polyfill.installAll();
       if (shaka.Player.isBrowserSupported()) {
         const player = new shaka.Player(video);
         playerRef.current = player;
 
+        // Konfigurasi DRM jika ada
+        if (hasDRM) {
+          player.configure({
+            drm: {
+              servers: {
+                [currentChannel.drmScheme]: currentChannel.licenseUrl
+              }
+            }
+          });
+        }
+
         player.load(url).catch(err => {
-          console.error('Shaka error, trying native:', err);
+          console.error('Shaka error, trying native', err);
           player.destroy();
           playerRef.current = null;
+          // Fallback native
           video.src = url;
-          video.play().catch(e => setPlayerError('Cannot play this stream.'));
+          video.play().catch(e => setPlayerError('Cannot play stream.'));
         });
       } else {
         video.src = url;
         video.play().catch(e => setPlayerError('Browser not supported.'));
       }
+    } else {
+      // HLS tanpa DRM, pakai native
+      video.src = url;
+      video.play().catch(err => setPlayerError('Cannot play stream.'));
     }
 
+    // Cleanup saat unmount atau ganti channel
     return () => {
-      // Cleanup saat unmount atau ganti channel (dilakukan di atas)
+      if (playerRef.current) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+      video.src = '';
     };
   }, [currentChannel]);
 
-  /* Putar channel, tutup sidebar di mobile */
   const play = (ch) => {
     setCurrentChannel(ch);
     if (window.innerWidth <= 768) setSidebarOpen(false);
@@ -128,14 +159,20 @@ function App() {
   const addSingle = (e) => {
     e.preventDefault();
     if (!fUrl.trim()) return;
-    const ch = { name: fName.trim() || 'Unnamed', group: fGroup.trim(), logo: fLogo.trim(), url: fUrl.trim() };
+    const ch = {
+      name: fName.trim() || 'Unnamed',
+      group: fGroup.trim(),
+      logo: fLogo.trim(),
+      url: fUrl.trim(),
+      licenseUrl: '',
+      drmScheme: 'com.widevine.alpha'
+    };
     setChannels(prev => [...prev, ch]);
     if (!currentChannel) setCurrentChannel(ch);
     setFName(''); setFGroup(''); setFLogo(''); setFUrl('');
     setShowAdd(false);
   };
 
-  /* Baca file M3U */
   const handleFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -144,7 +181,6 @@ function App() {
     r.readAsText(file);
   };
 
-  /* Import M3U */
   const importM3U = () => {
     if (!m3u.trim()) return;
     const parsed = parseM3U(m3u);
@@ -155,10 +191,8 @@ function App() {
     setShowAdd(false);
   };
 
-  /* Toggle kategori */
   const toggle = (group) => setExpandedGroup(expandedGroup === group ? null : group);
 
-  /* Grouping */
   const grouped = channels.reduce((acc, ch) => {
     const g = ch.group || 'Uncategorized';
     if (!acc[g]) acc[g] = [];
@@ -170,7 +204,7 @@ function App() {
   return (
     <div style={{ display: 'flex', height: '100dvh', width: '100%', overflow: 'hidden', background: 'var(--bg-primary)' }}>
 
-      {/* ====== SIDEBAR KIRI ====== */}
+      {/* SIDEBAR */}
       <div style={{
         width: sidebarOpen ? '320px' : '0px',
         maxWidth: '85vw',
@@ -185,16 +219,13 @@ function App() {
         display: 'flex',
         flexDirection: 'column',
       }}>
-        {/* Header sidebar */}
         <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <h2 style={{ margin: 0, fontSize: '0.8rem', letterSpacing: '0.1em' }}>CHANNELS</h2>
-          <button className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: '0.8rem' }}
-            onClick={() => { setShowAdd(!showAdd); }}>
+          <button className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: '0.8rem' }} onClick={() => setShowAdd(!showAdd)}>
             {showAdd ? '← Back' : '+ Add'}
           </button>
         </div>
 
-        {/* Konten sidebar */}
         <div style={{ padding: '16px', flex: 1, overflowY: 'auto' }}>
           {showAdd ? (
             <div>
@@ -250,9 +281,8 @@ function App() {
         </div>
       </div>
 
-      {/* ====== PLAYER AREA KANAN ====== */}
+      {/* PLAYER AREA */}
       <div style={{ flex: 1, height: '100dvh', background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {/* Hamburger button */}
         <button className="hamburger-btn" onClick={() => setSidebarOpen(!sidebarOpen)} style={{
           position: 'absolute', top: 12, left: 12, zIndex: 30,
           background: 'var(--bg-glass)', backdropFilter: 'blur(8px)', border: '1px solid var(--border)',
