@@ -16,11 +16,9 @@ function parseM3U(content) {
     if (!trimmed) continue;
 
     if (trimmed.startsWith('#EXTINF:')) {
-      // Ambil nama channel setelah koma terakhir
       const commaIndex = trimmed.lastIndexOf(',');
       currentName = commaIndex !== -1 ? trimmed.substring(commaIndex + 1).trim() : 'Unknown';
 
-      // Cari atribut tvg-name, group-title, tvg-logo
       const nameMatch = trimmed.match(/tvg-name="([^"]*)"/);
       if (nameMatch) currentName = nameMatch[1];
 
@@ -30,12 +28,9 @@ function parseM3U(content) {
       const logoMatch = trimmed.match(/tvg-logo="([^"]*)"/);
       if (logoMatch) currentLogo = logoMatch[1];
 
-    } else if (trimmed.startsWith('#KODIPROP:')) {
-      // DRM info bisa disimpan jika diperlukan, sementara diabaikan
-    } else if (trimmed.startsWith('#')) {
-      // Komentar lain diabaikan
+    } else if (trimmed.startsWith('#') || trimmed.startsWith('#KODIPROP:')) {
+      // Komentar atau metadata DRM, lewati
     } else {
-      // Ini URL stream
       currentUrl = trimmed;
       if (currentUrl) {
         channels.push({
@@ -44,7 +39,6 @@ function parseM3U(content) {
           logo: currentLogo || '',
           url: currentUrl,
         });
-        // Reset
         currentName = '';
         currentGroup = '';
         currentLogo = '';
@@ -58,7 +52,7 @@ function parseM3U(content) {
 // ==================== KOMPONEN UTAMA ====================
 function App() {
   // State global
-  const [activeTab, setActiveTab] = useState('player'); // 'library' atau 'player'
+  const [activeTab, setActiveTab] = useState('player');
   const [channels, setChannels] = useState(() => {
     try {
       const saved = localStorage.getItem('gravity_channels');
@@ -69,29 +63,26 @@ function App() {
   });
   const [currentChannel, setCurrentChannel] = useState(null);
 
-  // Simpan channels ke localStorage setiap berubah
+  // Simpan ke localStorage
   useEffect(() => {
     localStorage.setItem('gravity_channels', JSON.stringify(channels));
   }, [channels]);
 
-  // ========== STATE UNTUK FORM SINGLE STREAM ==========
+  // ========== STATE FORM SINGLE STREAM ==========
   const [formName, setFormName] = useState('');
   const [formGroup, setFormGroup] = useState('');
   const [formLogo, setFormLogo] = useState('');
   const [formUrl, setFormUrl] = useState('');
 
-  // ========== STATE UNTUK IMPORT M3U ==========
+  // ========== STATE IMPORT M3U ==========
   const [showM3UModal, setShowM3UModal] = useState(false);
   const [m3uContent, setM3uContent] = useState('');
+  const fileInputRef = useRef(null);
 
   // Tambah satu channel
   const addChannel = (channel) => {
     setChannels(prev => [...prev, channel]);
-    // Jika belum ada channel aktif, set sebagai aktif
-    if (!currentChannel) {
-      setCurrentChannel(channel);
-    }
-    // Reset form
+    if (!currentChannel) setCurrentChannel(channel);
     setFormName('');
     setFormGroup('');
     setFormLogo('');
@@ -102,23 +93,32 @@ function App() {
   const removeChannel = (index) => {
     const newChannels = channels.filter((_, i) => i !== index);
     setChannels(newChannels);
-    // Jika yang dihapus adalah channel aktif, pindah ke channel lain atau null
     if (currentChannel && index === channels.indexOf(currentChannel)) {
       setCurrentChannel(newChannels.length > 0 ? newChannels[0] : null);
     }
   };
 
-  // Submit form single stream
+  // Submit single stream
   const handleAddSingle = (e) => {
     e.preventDefault();
     if (!formUrl.trim()) return;
-    const newChannel = {
+    addChannel({
       name: formName.trim() || 'Unnamed',
       group: formGroup.trim(),
       logo: formLogo.trim(),
       url: formUrl.trim(),
+    });
+  };
+
+  // Baca file M3U dari HP
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setM3uContent(ev.target.result);
     };
-    addChannel(newChannel);
+    reader.readAsText(file);
   };
 
   // Import M3U dari textarea
@@ -137,11 +137,10 @@ function App() {
     setM3uContent('');
   };
 
-  // ========== PLAYER LOGIC ==========
+  // ========== PLAYER ==========
   const videoRef = useRef(null);
   const playerRef = useRef(null);
 
-  // Inisialisasi player hanya saat ada currentChannel dan tab Player
   useEffect(() => {
     if (activeTab !== 'player' || !currentChannel) return;
 
@@ -154,22 +153,16 @@ function App() {
 
     player.load(currentChannel.url).catch(console.error);
 
-    player.addEventListener('error', (event) => {
-      console.error('Shaka error', event.detail);
-    });
-
     return () => {
       player.destroy();
       playerRef.current = null;
     };
   }, [activeTab, currentChannel]);
 
-  // Saat pindah channel dari sidebar
   const switchChannel = (channel) => {
     setCurrentChannel(channel);
   };
 
-  // Reset semua
   const clearAll = () => {
     if (window.confirm('Hapus semua channel?')) {
       setChannels([]);
@@ -179,24 +172,11 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* ====== HEADER (MOBILE & DESKTOP) ====== */}
+      {/* ====== HEADER ====== */}
       <div className="mobile-nav" style={{ justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            className="hamburger-btn"
-            onClick={() => {
-              // Di Player, hamburger bisa toggle sidebar (seperti sebelumnya)
-              // Jika ingin selalu menuju Library, bisa diubah. Di sini kita biarkan toggle.
-            }}
-            style={{ visibility: activeTab === 'player' ? 'visible' : 'hidden' }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
           <h1 style={{ margin: 0 }}>Gravity</h1>
         </div>
-
         <div className="header-tabs">
           <button
             className={activeTab === 'library' ? 'active' : ''}
@@ -213,7 +193,7 @@ function App() {
         </div>
       </div>
 
-      {/* ====== KONTEN UTAMA ====== */}
+      {/* ====== KONTEN ====== */}
       {activeTab === 'library' && (
         <div className="library-container">
           <h2>Add Stream</h2>
@@ -262,35 +242,52 @@ function App() {
             </button>
           </form>
 
-          {/* Import M3U */}
-          <div>
-            <button
-              className="btn btn-secondary"
-              style={{ width: '100%', marginBottom: 10 }}
-              onClick={() => setShowM3UModal(true)}
-            >
-              Import M3U
+          {/* Tombol Import M3U */}
+          <button
+            className="btn btn-secondary"
+            style={{ width: '100%', marginBottom: 10 }}
+            onClick={() => setShowM3UModal(true)}
+          >
+            Import M3U
+          </button>
+          {channels.length > 0 && (
+            <button className="btn btn-danger" style={{ width: '100%' }} onClick={clearAll}>
+              Clear All Channels
             </button>
-            {channels.length > 0 && (
-              <button className="btn btn-danger" style={{ width: '100%' }} onClick={clearAll}>
-                Clear All Channels
-              </button>
-            )}
-          </div>
+          )}
 
-          {/* Modal Import M3U */}
+          {/* ===== MODAL IMPORT M3U ===== */}
           {showM3UModal && (
             <div className="modal-overlay" onClick={() => setShowM3UModal(false)}>
               <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <h2>Load M3U File</h2>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: 12, fontSize: '0.8rem' }}>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: 16, fontSize: '0.8rem' }}>
                   or paste content below
                 </p>
+
+                {/* Tombol Load File */}
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', marginBottom: 16 }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Load M3U File
+                </button>
+                <input
+                  type="file"
+                  accept=".m3u,.m3u8,.txt"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleFileChange}
+                />
+
+                {/* Textarea untuk paste konten */}
                 <textarea
-                  placeholder="#EXTM3U&#10;#EXTINF:-1,Channel Name&#10;https://stream.url"
+                  placeholder={`#EXTM3U\n#EXTINF:-1 tvg-name="Channel" group-title="Group",Channel Name\nhttps://stream.url`}
                   value={m3uContent}
                   onChange={(e) => setM3uContent(e.target.value)}
                 />
+
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button className="btn btn-primary" onClick={handleImportM3U}>
                     Import to Library
@@ -307,7 +304,6 @@ function App() {
 
       {activeTab === 'player' && (
         <>
-          {/* Sidebar + Player (desktop layout) */}
           <div className="sidebar">
             <h2>Channels</h2>
             {channels.length === 0 ? (
@@ -368,7 +364,7 @@ function App() {
             ) : (
               <div className="empty-state">
                 <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z" />
+                  <path d="M8 5v14l11-7z" />
                 </svg>
                 <p>Select a channel from the list</p>
               </div>
@@ -377,24 +373,14 @@ function App() {
         </>
       )}
 
-      {/* ====== MOBILE TAB BAR (hanya estetika, bisa dihapus) ====== */}
+      {/* Mobile Tab Bar */}
       <div className="mobile-tab-bar">
-        <button
-          className={activeTab === 'library' ? 'active' : ''}
-          onClick={() => setActiveTab('library')}
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M4 6h2v2H4V6zm4 0h12v2H8V6zM4 11h2v2H4v-2zm4 0h12v2H8v-2zM4 16h2v2H4v-2zm4 0h12v2H8v-2z" />
-          </svg>
+        <button className={activeTab === 'library' ? 'active' : ''} onClick={() => setActiveTab('library')}>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h2v2H4V6zm4 0h12v2H8V6zM4 11h2v2H4v-2zm4 0h12v2H8v-2zM4 16h2v2H4v-2zm4 0h12v2H8v-2z" /></svg>
           Library
         </button>
-        <button
-          className={activeTab === 'player' ? 'active' : ''}
-          onClick={() => setActiveTab('player')}
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5v14l11-7z" />
-          </svg>
+        <button className={activeTab === 'player' ? 'active' : ''} onClick={() => setActiveTab('player')}>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
           Player
         </button>
       </div>
